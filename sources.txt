@@ -1,0 +1,4 @@
+# Repos whose GitHub Release wheels are published to the index.
+# One owner/repo per line. Drafts and pre-releases are skipped.
+The-Everyone-Project/tumult-core
+The-Everyone-Project/tumult-analytics

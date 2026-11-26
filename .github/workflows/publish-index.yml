@@ -1,0 +1,63 @@
+name: Publish package index
+
+# Rebuilds the whole index from the fork releases each time, so a new fork
+# release appears within a day with no change to this repo or the forks.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download release wheels
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p wheels
+          grep -vE '^\s*(#|$)' sources.txt | while read -r repo; do
+            gh api --paginate "repos/${repo}/releases" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+            while read -r tag; do
+              echo "${repo} ${tag}"
+              gh release download "${tag}" -R "${repo}" -p '*.whl' -D wheels --skip-existing
+            done
+          done
+          ls -1 wheels
+
+      - name: Build index
+        run: python3 scripts/build_index.py wheels site
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
